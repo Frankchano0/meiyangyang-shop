@@ -3170,7 +3170,7 @@ window.__OFFLINE_STORES__ = [{"id": 2, "slug": "meiyangyang", "name": "萨瓦迪
             <div class="zm-actions">
               ${
                 isHttpUrl
-                  ? `<a class="xianyu-btn-primary" href="${esc(xianyuUrl)}" target="_blank" rel="noopener">
+                  ? `<a class="xianyu-btn-primary" id="xianyu-open-btn" href="${esc(xianyuUrl)}" target="_blank" rel="noopener">
                       <span>前往闲鱼查看宝贝</span>
                       <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.25" aria-hidden="true"><path d="M2.5 9.5L9.5 2.5M4 2.5h5.5V8"/></svg>
                     </a>`
@@ -3178,7 +3178,7 @@ window.__OFFLINE_STORES__ = [{"id": 2, "slug": "meiyangyang", "name": "萨瓦迪
               }
               ${
                 taobaoUrl
-                  ? `<a class="xianyu-btn-secondary" href="${esc(taobaoUrl)}" target="_blank" rel="noopener" style="display:flex;justify-content:space-between;align-items:center;text-decoration:none">
+                  ? `<a class="xianyu-btn-secondary" id="taobao-ref-btn" href="${esc(taobaoUrl)}" target="_blank" rel="noopener" style="display:flex;justify-content:space-between;align-items:center;text-decoration:none">
                       <span>淘宝原物参考</span>
                       <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.25" aria-hidden="true"><path d="M2.5 9.5L9.5 2.5M4 2.5h5.5V8"/></svg>
                     </a>`
@@ -3257,6 +3257,44 @@ window.__OFFLINE_STORES__ = [{"id": 2, "slug": "meiyangyang", "name": "萨瓦迪
           navigator.clipboard?.writeText(text);
           toast('已复制闲鱼链接与货号');
         };
+
+        const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+        const inWeChat = /MicroMessenger/i.test(navigator.userAgent);
+        const copyItemLink = (href) => {
+          navigator.clipboard?.writeText(`闲鱼宝贝：${p.title} [货号 ${p.sku}] ${href}`);
+        };
+        const openBtn = $('#xianyu-open-btn');
+        if (openBtn && isMobile) {
+          openBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            const href = openBtn.href;
+            if (inWeChat) {
+              copyItemLink(href);
+              toast('已复制宝贝链接，请打开闲鱼App查看');
+              return;
+            }
+            const itemId = (href.match(/[?&]id=(\d+)/) || [])[1] || '';
+            let jumped = false;
+            const onHide = () => { jumped = true; };
+            document.addEventListener('visibilitychange', onHide, { once: true });
+            window.location.href = itemId ? `fleamarket://item?id=${itemId}` : 'fleamarket://';
+            setTimeout(() => {
+              document.removeEventListener('visibilitychange', onHide);
+              if (!document.hidden && !jumped) {
+                copyItemLink(href);
+                toast('未检测到闲鱼App，已复制宝贝链接');
+              }
+            }, 1600);
+          });
+        }
+        const tbBtn = $('#taobao-ref-btn');
+        if (tbBtn && isMobile && inWeChat) {
+          tbBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            copyItemLink(tbBtn.href);
+            toast('已复制链接，请在手机浏览器或淘宝中打开');
+          });
+        }
 
         $('#product-modal-mask').classList.add('open');
         document.body.style.overflow = 'hidden';

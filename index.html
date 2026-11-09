@@ -1655,12 +1655,17 @@
     /* ── ZARA 风格筛选面板：四列选项（男女 / 码数 / 品类 / 成新度） ── */
     .filter-panel {
       display: none;
-      grid-template-columns: repeat(4, minmax(150px, max-content));
+      grid-template-columns: repeat(5, minmax(150px, max-content));
       justify-content: center;
-      gap: 72px;
+      gap: 56px;
       border-top: 1px solid var(--hairline);
       margin-top: 14px;
       padding: 20px 0 24px;
+    }
+
+    .filter-panel .filter-col {
+      max-height: 300px;
+      overflow-y: auto;
     }
 
     .filter-panel.open {
@@ -2216,17 +2221,7 @@
       />
       <button class="search-clear" id="search-clear">清除</button>
     </div>
-    <div class="trending-bar" id="trending-bar">
-      <span>热门：</span>
-      <button class="trend-pill" data-kw="大衣">羊毛大衣</button>
-      <button class="trend-pill" data-kw="毛衣">针织毛衣</button>
-      <button class="trend-pill" data-kw="连衣裙">缎面连衣裙</button>
-      <button class="trend-pill" data-kw="包">大牌手袋</button>
-      <button class="trend-pill" data-kw="鞋">鞋靴</button>
-      <button class="trend-pill" data-kw="西装">廓形西装</button>
-      <button class="trend-pill" data-kw="阔腿">垂感阔腿裤</button>
-      <button class="trend-pill" data-kw="真丝">桑蚕丝衬衫</button>
-    </div>
+    <div class="trending-bar" id="trending-bar"></div>
   </section>
 
   <main class="catalog-main">
@@ -2346,6 +2341,11 @@ window.__OFFLINE_STORES__ = [{"id": 2, "slug": "meiyangyang", "name": "萨瓦迪
         }
         return s ? s.split('/').map((x) => x.trim()).filter(Boolean) : [];
       }
+      // 品牌归一：空值与「其他/other」合并，避免筛选器出现重复杂项
+      function brandOf(p) {
+        const b = String(p.brand || '').trim();
+        return !b || /^other/i.test(b) || b === '其他' ? '其他' : b;
+      }
       function genderOf(p) {
         const t = String(p.title || '');
         if (p.category === 'MAN' || /男装|男士|男款|男式/.test(t)) return '男装';
@@ -2362,7 +2362,7 @@ window.__OFFLINE_STORES__ = [{"id": 2, "slug": "meiyangyang", "name": "萨瓦迪
         keyword: '',
         group: '',
         sub: '',
-        filters: { gender: new Set(), size: new Set(), cat: new Set(), cond: new Set() },
+        filters: { gender: new Set(), size: new Set(), cat: new Set(), cond: new Set(), brand: new Set() },
         filterExpanded: new Set(),
         onlySaved: false,
         savedIds: JSON.parse(localStorage.getItem(SAVED_KEY) || '[]'),
@@ -2521,6 +2521,51 @@ window.__OFFLINE_STORES__ = [{"id": 2, "slug": "meiyangyang", "name": "萨瓦迪
         toast(cur ? `已进入：${cur.name}` : '已切换为全部买手馆联展');
       }
 
+      // 热门推荐候选：只保留当前店铺确有命中商品的关键词
+      const TREND_CANDIDATES = [
+        { label: '羊毛大衣', kw: '大衣' },
+        { label: '针织毛衣', kw: '毛衣' },
+        { label: '缎面连衣裙', kw: '连衣裙' },
+        { label: '大牌手袋', kw: '包' },
+        { label: '鞋靴', kw: '鞋' },
+        { label: '廓形西装', kw: '西装' },
+        { label: '垂感阔腿裤', kw: '阔腿' },
+        { label: '桑蚕丝衬衫', kw: '真丝' }
+      ];
+      function trendHit(kw) {
+        const k = String(kw).toLowerCase();
+        return state.products.some((p) =>
+          [p.title, p.subtitle, p.brand, p.spec].some((f) => String(f || '').toLowerCase().includes(k))
+        );
+      }
+      function renderTrending() {
+        const bar = $('#trending-bar');
+        if (!bar) return;
+        const cnt = {};
+        state.products.forEach((p) => {
+          const b = brandOf(p);
+          if (b !== '其他') cnt[b] = (cnt[b] || 0) + 1;
+        });
+        const brandPills = Object.entries(cnt)
+          .filter(([, n]) => n >= 2)
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 3)
+          .map(([b]) => ({ label: b.split('/')[0].trim(), kw: b.split('/')[0].trim() }));
+        const opts = [...brandPills, ...TREND_CANDIDATES.filter((o) => trendHit(o.kw))].slice(0, 8);
+        bar.style.display = opts.length ? '' : 'none';
+        bar.innerHTML = opts.length
+          ? `<span>热门：</span>` + opts.map((o) => `<button class="trend-pill" data-kw="${esc(o.kw)}">${esc(o.label)}</button>`).join('')
+          : '';
+        bar.querySelectorAll('.trend-pill').forEach((btn) => {
+          btn.onclick = () => {
+            $('#search-input').value = btn.dataset.kw;
+            state.keyword = btn.dataset.kw;
+            $('#search-clear').classList.add('visible');
+            renderGrid();
+          };
+        });
+      }
+
       async function loadCatalog() {
         // 分页拉全量：接口单页上限 100，按当前所选店铺（store_id）过滤
         const storeQuery = state.currentStoreId ? `&store_id=${encodeURIComponent(state.currentStoreId)}` : '';
@@ -2538,6 +2583,7 @@ window.__OFFLINE_STORES__ = [{"id": 2, "slug": "meiyangyang", "name": "萨瓦迪
         }));
         renderCategories();
         renderFilters();
+        renderTrending();
         renderGrid();
       }
 
@@ -2626,12 +2672,23 @@ window.__OFFLINE_STORES__ = [{"id": 2, "slug": "meiyangyang", "name": "萨瓦迪
       function sizeOpts() {
         return [...new Set(state.products.flatMap(sizeChipsOf).map((s) => (/^\d/.test(s) ? '鞋码' : s)))].sort(sizeSort);
       }
+      function brandOpts() {
+        const cnt = {};
+        state.products.forEach((p) => {
+          const b = brandOf(p);
+          cnt[b] = (cnt[b] || 0) + 1;
+        });
+        return Object.entries(cnt)
+          .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'zh'))
+          .map(([b]) => b);
+      }
       function countFor(dim, val) {
         return state.products.filter((p) => {
           if (dim === 'gender') return genderOf(p) === val;
           if (dim === 'size') return sizeSelected(p, new Set([val]));
           if (dim === 'cat') return p.category === val;
           if (dim === 'cond') return (p.condition_grade || '全新') === val;
+          if (dim === 'brand') return brandOf(p) === val;
           return false;
         }).length;
       }
@@ -2661,6 +2718,7 @@ window.__OFFLINE_STORES__ = [{"id": 2, "slug": "meiyangyang", "name": "萨瓦迪
         const dims = [
           { key: '_gender', title: '性别', html: genderCol },
           { key: 'size', title: '尺码', opts: sizeOpts() },
+          { key: 'brand', title: '品牌', opts: brandOpts() },
           { key: 'cond', title: '成新度', opts: [...new Set(state.products.map((p) => p.condition_grade || '全新'))].sort((a, b) => COND_ORDER.indexOf(a) - COND_ORDER.indexOf(b)) }
         ];
         const html =
@@ -2739,12 +2797,17 @@ window.__OFFLINE_STORES__ = [{"id": 2, "slug": "meiyangyang", "name": "萨瓦迪
             <a data-menu="admin">后台上新</a>
           </div>
           <div class="menu-col-quick">
-            <a data-menu="sub:APPAREL|OUTERWEAR">大衣外套</a>
-            <a data-menu="sub:APPAREL|DRESSES">连衣裙与半裙</a>
-            <a data-menu="group:BAGS">大牌手袋</a>
-            <a data-menu="group:SHOES">鞋靴</a>
-            <a data-menu="kw:针织">针织毛衣</a>
-            <a data-menu="kw:西装">廓形西装</a>
+            ${[
+              { spec: 'sub:APPAREL|OUTERWEAR', label: '大衣外套', has: () => state.products.some((p) => p.category === 'OUTERWEAR') },
+              { spec: 'sub:APPAREL|DRESSES', label: '连衣裙与半裙', has: () => state.products.some((p) => p.category === 'DRESSES') },
+              { spec: 'group:BAGS', label: '大牌手袋', has: () => state.products.some((p) => groupOf(p.category) === 'BAGS') },
+              { spec: 'group:SHOES', label: '鞋靴', has: () => state.products.some((p) => groupOf(p.category) === 'SHOES') },
+              { spec: 'kw:针织', label: '针织毛衣', has: () => trendHit('针织') },
+              { spec: 'kw:西装', label: '廓形西装', has: () => trendHit('西装') }
+            ]
+              .filter((q) => q.has())
+              .map((q) => `<a data-menu="${esc(q.spec)}">${esc(q.label)}</a>`)
+              .join('')}
           </div>`;
         cols.querySelectorAll('a').forEach((a) => {
           a.onclick = () => menuAction(a.dataset.menu);
@@ -2821,6 +2884,7 @@ window.__OFFLINE_STORES__ = [{"id": 2, "slug": "meiyangyang", "name": "萨瓦迪
           if (state.filters.size.size && !sizeSelected(p, state.filters.size)) return false;
           if (state.filters.cat.size && !state.filters.cat.has(p.category)) return false;
           if (state.filters.cond.size && !state.filters.cond.has(p.condition_grade || '全新')) return false;
+          if (state.filters.brand.size && !state.filters.brand.has(brandOf(p))) return false;
           if (state.keyword) {
             const kw = state.keyword.toLowerCase();
             return (
@@ -3338,15 +3402,6 @@ window.__OFFLINE_STORES__ = [{"id": 2, "slug": "meiyangyang", "name": "萨瓦迪
         searchClear.classList.remove('visible');
         renderGrid();
       };
-
-      document.querySelectorAll('.trend-pill').forEach((btn) => {
-        btn.onclick = () => {
-          searchInput.value = btn.dataset.kw;
-          state.keyword = btn.dataset.kw;
-          searchClear.classList.add('visible');
-          renderGrid();
-        };
-      });
 
       // 筛选面板开关与网格列数切换（2列大图 / 4列标准画册）
       $('#filter-toggle-btn').onclick = () => {

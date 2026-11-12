@@ -3045,8 +3045,9 @@ window.__OFFLINE_STORES__ = [{"id": 2, "slug": "meiyangyang", "name": "萨瓦迪
         const sizeSpecUsed = specParts.length && SIZE_RE.test(specParts[0]);
         const variants = p.variants || [];
         let selVi = 0;
-        const sizeChips = variants.length > 1 ? (variants[0].sizes || ['均码']) : sizeChipsOf(p);
-        const sizeText = sizeChipsOf(p).join(' / ');
+        const sizeChips = sizeChipsOf(p);
+        const sizeText = sizeChips.join(' / ');
+        const colorText = [...new Set(variants.map((v) => String(v.color || '').trim()).filter((c) => c && c !== '默认'))].join('、');
         const extraSpecs = specParts.slice(sizeSpecUsed ? 1 : 0);
         const cleanSellerText = (raw) =>
           String(raw || '')
@@ -3078,6 +3079,7 @@ window.__OFFLINE_STORES__ = [{"id": 2, "slug": "meiyangyang", "name": "萨瓦迪
               <div class="zm-block-text" style="margin-bottom:20px">
                 <strong>款式名称：</strong>${esc(p.title)}<br/>
                 ${p.brand ? `<strong>品牌：</strong>${esc(p.brand)}<br/>` : ''}
+                ${colorText ? `<strong>颜色：</strong>${esc(colorText)}<br/>` : ''}
                 ${sizeText ? `<strong>尺码：</strong>${esc(sizeText)}<br/>` : ''}
                 ${extraSpecs.length ? `<strong>规格参数：</strong><br/>${extraSpecs.map((s) => `· ${esc(s)}`).join('<br/>')}<br/>` : ''}
               </div>
